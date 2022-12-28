@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
@@ -9,7 +10,9 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  runApp(const MyApp());
+  runApp(
+    const MyApp(),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -33,8 +36,6 @@ class MyWidget extends StatefulWidget {
 class _MyWidgetState extends State<MyWidget> {
   final TextEditingController _controller = TextEditingController();
 
-  final _list = List.generate(10, (index) => 'test $index');
-
   @override
   void dispose() {
     _controller.dispose();
@@ -43,7 +44,6 @@ class _MyWidgetState extends State<MyWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final reverseList = _list.reversed.toList();
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -53,14 +53,37 @@ class _MyWidgetState extends State<MyWidget> {
               child: Container(
                 height: double.infinity,
                 alignment: Alignment.topCenter,
-                child: ListView.builder(
-                  itemCount: reverseList.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    return Center(
-                      child: Text(
-                        reverseList[index],
-                        style: const TextStyle(fontSize: 20),
-                      ),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('dream')
+                      .orderBy('createdAt')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Text('エラーが発生しました');
+                    }
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final list = snapshot.requireData.docs
+                        .map<String>((DocumentSnapshot document) {
+                      final documentData =
+                      document.data()! as Map<String, dynamic>;
+                      return documentData['content']! as String;
+                    }).toList();
+
+                    final reverseList = list.reversed.toList();
+
+                    return ListView.builder(
+                      itemCount: reverseList.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        return Center(
+                          child: Text(
+                            reverseList[index],
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -76,10 +99,15 @@ class _MyWidgetState extends State<MyWidget> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    setState(() {
-                      _list.add(_controller.text);
-                      _controller.clear();
-                    });
+                    final document = <String, dynamic>{
+                      'content': _controller.text,
+                      'createdAt': Timestamp.fromDate(DateTime.now()),
+                    };
+                    FirebaseFirestore.instance
+                        .collection('dream')
+                        .doc()
+                        .set(document);
+                    setState(_controller.clear);
                   },
                   child: const Text('送信'),
                 )
